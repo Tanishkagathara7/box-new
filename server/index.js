@@ -70,15 +70,6 @@ app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV === 'production') {
   // Serve static files from the React build
   app.use(express.static(path.join(__dirname, '../dist')));
-  
-  // Handle React routing, return all requests to React app
-  app.get('*', (req, res, next) => {
-    // Skip API routes
-    if (req.path.startsWith('/api/')) {
-      return next();
-    }
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
-  });
 }
 
 // MongoDB Connection
@@ -137,11 +128,33 @@ import { healthCheck } from "./lib/healthCheck.js";
 // Health Check endpoint
 app.get("/api/health", healthCheck);
 
+// Root endpoint for deployment health checks
+app.get("/", (req, res) => {
+  res.json({
+    message: "BoxCric API Server is running",
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    version: "1.0.0"
+  });
+});
+
 // Import error handling middleware
 import { errorConverter, errorHandler, notFound, setupErrorHandlers } from "./lib/errorHandler.js";
 
 // Setup global error handlers for uncaught exceptions
 setupErrorHandlers();
+
+// Handle React routing in production - return all non-API requests to React app
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  });
+}
 
 // 404 Handler - Must be after all routes
 app.use("*", notFound);
