@@ -38,10 +38,12 @@ const io = new Server(server, {
       : [
           "http://localhost:5173",
           "http://localhost:8080",
+          "http://localhost:8081",
+          "http://localhost:8082",
           "http://localhost:3000",
           "http://localhost:4000"
         ],
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true
   },
 });
@@ -58,6 +60,8 @@ app.use(cors({
     : [
         "http://localhost:5173",
         "http://localhost:8080",
+        "http://localhost:8081",
+        "http://localhost:8082",
         "http://localhost:3000",
         "http://localhost:4000"
       ],

@@ -25,7 +25,21 @@ export default defineConfig(({ mode }) => ({
     },
     chunkSizeWarningLimit: 1000,
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'jsxdev-fix',
+      transformIndexHtml(html) {
+        return html.replace(
+          '<head>',
+          `<head>
+    <script>
+      window.jsxDEV = function() { return null; };
+    </script>`
+        );
+      }
+    }
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
