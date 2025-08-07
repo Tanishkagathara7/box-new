@@ -28,23 +28,37 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
-      ? [
-          process.env.FRONTEND_URL,
-          'https://boxcric.netlify.app',
-          'https://box-host.netlify.app', // <-- added for Netlify frontend
-          'https://box-9t8s1yy3n-tanishs-projects-fa8014b4.vercel.app', // <-- added for Vercel deployment
-          'https://box-new.vercel.app', // <-- added for new Vercel deployment
-          '*'
-        ]
-      : [
-          "http://localhost:5173",
-          "http://localhost:8080",
-          "http://localhost:8081",
-          "http://localhost:8082",
-          "http://localhost:3000",
-          "http://localhost:4000"
-        ],
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, etc.)
+      if (!origin) return callback(null, true);
+      
+      const allowedOrigins = process.env.NODE_ENV === 'production' 
+        ? [
+            process.env.FRONTEND_URL,
+            'https://boxcric.netlify.app',
+            'https://box-host.netlify.app',
+            'https://box-9t8s1yy3n-tanishs-projects-fa8014b4.vercel.app',
+            'https://box-new.vercel.app'
+          ]
+        : [
+            "http://localhost:5173",
+            "http://localhost:8080",
+            "http://localhost:8081",
+            "http://localhost:8082",
+            "http://localhost:3000",
+            "http://localhost:4000",
+            "http://10.91.186.90:8080"
+          ];
+      
+      // Check if origin is in allowed list or matches Vercel pattern
+      if (allowedOrigins.includes(origin) || 
+          (process.env.NODE_ENV === 'production' && origin.match(/https:\/\/.*\.vercel\.app$/)) ||
+          process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      
+      callback(new Error('Not allowed by CORS'));
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true
   },
@@ -52,23 +66,45 @@ const io = new Server(server, {
 
 // Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? [
-        process.env.FRONTEND_URL,
-        'https://boxcric.netlify.app',
-        'https://box-host.netlify.app', // <-- added for Netlify frontend
-        'https://box-9t8s1yy3n-tanishs-projects-fa8014b4.vercel.app', // <-- added for Vercel deployment
-        'https://box-new.vercel.app', // <-- added for new Vercel deployment
-        '*'
-      ]
-    : [
-        "http://localhost:5173",
-        "http://localhost:8080",
-        "http://localhost:8081",
-        "http://localhost:8082",
-        "http://localhost:3000",
-        "http://localhost:4000"
-      ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = process.env.NODE_ENV === 'production' 
+      ? [
+          process.env.FRONTEND_URL,
+          'https://boxcric.netlify.app',
+          'https://box-host.netlify.app',
+          'https://box-9t8s1yy3n-tanishs-projects-fa8014b4.vercel.app',
+          'https://box-new.vercel.app'
+        ]
+      : [
+          "http://localhost:5173",
+          "http://localhost:8080",
+          "http://localhost:8081",
+          "http://localhost:8082",
+          "http://localhost:3000",
+          "http://localhost:4000",
+          "http://10.91.186.90:8080"
+        ];
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Check if origin matches Vercel pattern (for production)
+    if (process.env.NODE_ENV === 'production' && origin.match(/https:\/\/.*\.vercel\.app$/)) {
+      return callback(null, true);
+    }
+    
+    // For development, be more permissive
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 app.use(express.json());
