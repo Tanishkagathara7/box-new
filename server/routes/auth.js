@@ -175,8 +175,15 @@ router.post("/register", async (req, res) => {
       ipAddress: req.ip,
     });
 
-    // Send OTP email
-    await sendOTPEmail(email, otp, "registration");
+    // Send OTP email (non-blocking)
+    try {
+      await sendOTPEmail(email, otp, "registration");
+      console.log(`✅ OTP email sent successfully to ${email}`);
+    } catch (emailError) {
+      console.error(`⚠️ Email sending failed for ${email}:`, emailError.message);
+      // Don't block registration if email fails - OTP is still saved in database
+      console.log(`📧 OTP for ${email}: ${otp} (email failed, logging to console)`);
+    }
 
     // Store user data temporarily (you might want to use Redis for this)
     const tempUserData = { name, email, phone, password };
@@ -184,7 +191,7 @@ router.post("/register", async (req, res) => {
     res.status(200).json({
       success: true,
       message:
-        "OTP sent to your email. Please verify to complete registration.",
+        "Registration initiated! Please check your email for the OTP verification code. If you don't receive an email, check the server console.",
       tempToken: jwt.sign(tempUserData, process.env.JWT_SECRET, {
         expiresIn: "15m",
       }),
