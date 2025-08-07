@@ -34,6 +34,7 @@ const io = new Server(server, {
           'https://boxcric.netlify.app',
           'https://box-host.netlify.app', // <-- added for Netlify frontend
           'https://box-9t8s1yy3n-tanishs-projects-fa8014b4.vercel.app', // <-- added for Vercel deployment
+          'https://box-new.vercel.app', // <-- added for new Vercel deployment
           '*'
         ]
       : [
@@ -57,6 +58,7 @@ app.use(cors({
         'https://boxcric.netlify.app',
         'https://box-host.netlify.app', // <-- added for Netlify frontend
         'https://box-9t8s1yy3n-tanishs-projects-fa8014b4.vercel.app', // <-- added for Vercel deployment
+        'https://box-new.vercel.app', // <-- added for new Vercel deployment
         '*'
       ]
     : [
