@@ -130,10 +130,12 @@ const sendOTPEmail = async (email, otp, purpose) => {
 // Register user
 router.post("/register", async (req, res) => {
   try {
+    console.log('Registration request received:', { body: req.body });
     const { name, email, phone, password } = req.body;
 
     // Validation
     if (!name || !email || !phone || !password) {
+      console.log('Validation failed - missing fields:', { name: !!name, email: !!email, phone: !!phone, password: !!password });
       return res.status(400).json({
         success: false,
         message: "All fields are required",
@@ -189,9 +191,29 @@ router.post("/register", async (req, res) => {
     });
   } catch (error) {
     console.error("Registration error:", error);
+    
+    // Handle specific MongoDB errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyValue)[0];
+      return res.status(400).json({
+        success: false,
+        message: `User with this ${field} already exists`,
+      });
+    }
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: messages.join(', '),
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: "Registration failed. Please try again.",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
