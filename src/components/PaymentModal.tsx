@@ -152,6 +152,29 @@ const PaymentModal = ({
     }).format(amount);
   }, []);
 
+  // Cleanup effect for payment processing
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isProcessing) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+    };
+
+    if (isProcessing) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // If modal is closed while processing, show cancellation message
+      if (isProcessing) {
+        toast.error("Payment was cancelled.");
+      }
+    };
+  }, [isProcessing]);
+
   const handlePayment = useCallback(async () => {
     if (!booking || !user || !bookingData) return;
 
@@ -189,6 +212,20 @@ const PaymentModal = ({
         };
         
         console.log("Opening Cashfree checkout with:", checkoutOptions);
+        
+        // Handle payment cancellation/exit
+        cashfree.on('payment-failed', (data: any) => {
+          console.log('Payment failed:', data);
+          toast.error("Payment was cancelled or failed.");
+          setIsProcessing(false);
+        });
+        
+        cashfree.on('payment-cancelled', (data: any) => {
+          console.log('Payment cancelled:', data);
+          toast.error("Payment was cancelled.");
+          setIsProcessing(false);
+        });
+        
         cashfree.checkout(checkoutOptions);
       } else {
         // Fallback to direct redirect if SDK not loaded

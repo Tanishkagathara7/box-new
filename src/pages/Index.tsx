@@ -3,7 +3,7 @@ import { MapPin, Zap, Star, Clock, Sparkles, Search, Play, Trophy, Users, Shield
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/Navbar";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 
 import Footer from "@/components/Footer";
@@ -176,6 +176,53 @@ const Index = () => {
     setIsDarkMode(!isDarkMode);
     document.documentElement.classList.toggle('dark');
   };
+
+  // Payment callback handling
+  const [searchParams] = useSearchParams();
+  
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    const bookingId = searchParams.get('booking_id');
+    const orderId = searchParams.get('order_id');
+    const error = searchParams.get('error');
+
+    if (paymentStatus) {
+      // Clear the URL parameters after processing
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('payment');
+      newUrl.searchParams.delete('booking_id');
+      newUrl.searchParams.delete('order_id');
+      newUrl.searchParams.delete('error');
+      window.history.replaceState({}, '', newUrl.toString());
+
+      if (paymentStatus === 'success') {
+        toast.success("🎉 Payment successful! Your booking has been confirmed.", {
+          description: `Booking ID: ${bookingId}`,
+          duration: 5000,
+        });
+      } else if (paymentStatus === 'failed') {
+        toast.error("❌ Payment failed. Please try again.", {
+          description: error || "Your booking was not confirmed.",
+          duration: 5000,
+        });
+      } else if (paymentStatus === 'pending') {
+        toast.info("⏳ Payment is being processed. Please wait.", {
+          description: "We'll notify you once the payment is confirmed.",
+          duration: 5000,
+        });
+      } else if (paymentStatus === 'cancelled') {
+        toast.error("❌ Payment was cancelled.", {
+          description: "Your booking was not confirmed. You can try booking again.",
+          duration: 5000,
+        });
+      } else if (paymentStatus === 'error') {
+        toast.error("❌ Payment processing error.", {
+          description: error || "Please contact support if the issue persists.",
+          duration: 5000,
+        });
+      }
+    }
+  }, [searchParams]);
 
   // Test API connection on mount
   useEffect(() => {

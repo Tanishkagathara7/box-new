@@ -164,10 +164,10 @@ router.post("/create-order", authMiddleware, async (req, res) => {
       },
       order_meta: {
         return_url: IS_DEVELOPMENT 
-          ? "https://example.com/payment/callback" // Placeholder for development
-          : `${req.protocol}://${req.get('host')}/payment/callback?booking_id=${booking._id}`,
+          ? `${req.protocol}://${req.get('host')}/api/payments/callback?booking_id=${booking._id}` // Use local callback for development
+          : `${req.protocol}://${req.get('host')}/api/payments/callback?booking_id=${booking._id}`,
         notify_url: IS_DEVELOPMENT 
-          ? "https://example.com/payment/webhook" // Placeholder for development
+          ? `${req.protocol}://${req.get('host')}/api/payments/webhook` // Use local webhook for development
           : `${req.protocol}://${req.get('host')}/api/payments/webhook`,
         payment_methods: "cc,dc,nb,upi,paylater,emi"
       }
@@ -348,6 +348,40 @@ router.post("/verify-payment", authMiddleware, async (req, res) => {
 });
 
 /**
+ * Handle payment cancellation/exit
+ */
+router.get("/cancel", async (req, res) => {
+  try {
+    const { booking_id, order_id } = req.query;
+    
+    console.log("Payment cancellation received:", { booking_id, order_id });
+    
+    // Determine the frontend URL to redirect to
+    const frontendUrl = process.env.FRONTEND_URL || 
+      (process.env.NODE_ENV === 'production' 
+        ? 'https://boxcric.netlify.app' 
+        : 'http://localhost:5173');
+    
+    // Redirect to home page with cancellation message
+    const cancelUrl = `${frontendUrl}/?payment=cancelled&booking_id=${booking_id}&order_id=${order_id}`;
+    console.log("Redirecting to cancellation URL:", cancelUrl);
+    return res.redirect(cancelUrl);
+    
+  } catch (error) {
+    console.error("Payment cancellation error:", error);
+    
+    // Redirect to home page with error message
+    const frontendUrl = process.env.FRONTEND_URL || 
+      (process.env.NODE_ENV === 'production' 
+        ? 'https://boxcric.netlify.app' 
+        : 'http://localhost:5173');
+    
+    const errorUrl = `${frontendUrl}/?payment=error&error=${encodeURIComponent('Payment cancellation error')}`;
+    return res.redirect(errorUrl);
+  }
+});
+
+/**
  * Handle payment failure
  */
 router.post("/payment-failed", authMiddleware, async (req, res) => {
@@ -443,6 +477,67 @@ router.post("/webhook", async (req, res) => {
   } catch (error) {
     console.error("Webhook processing error:", error);
     res.status(500).json({ success: false, message: "Webhook processing failed" });
+  }
+});
+
+/**
+ * Payment callback handler - handles redirects from Cashfree
+ */
+router.get("/callback", async (req, res) => {
+  try {
+    const { 
+      order_id, 
+      payment_session_id, 
+      order_status, 
+      booking_id,
+      error_code,
+      error_message 
+    } = req.query;
+
+    console.log("Payment callback received:", {
+      order_id,
+      payment_session_id,
+      order_status,
+      booking_id,
+      error_code,
+      error_message
+    });
+
+    // Determine the frontend URL to redirect to
+    const frontendUrl = process.env.FRONTEND_URL || 
+      (process.env.NODE_ENV === 'production' 
+        ? 'https://boxcric.netlify.app' 
+        : 'http://localhost:5173');
+
+    // Check if payment was successful
+    if (order_status === 'PAID') {
+      // Redirect to home page with success message
+      const successUrl = `${frontendUrl}/?payment=success&booking_id=${booking_id}&order_id=${order_id}`;
+      console.log("Redirecting to success URL:", successUrl);
+      return res.redirect(successUrl);
+    } else if (order_status === 'FAILED' || order_status === 'EXPIRED' || error_code) {
+      // Redirect to home page with failure message
+      const failureUrl = `${frontendUrl}/?payment=failed&booking_id=${booking_id}&order_id=${order_id}&error=${encodeURIComponent(error_message || 'Payment failed')}`;
+      console.log("Redirecting to failure URL:", failureUrl);
+      return res.redirect(failureUrl);
+    } else {
+      // Payment is still pending or unknown status
+      const pendingUrl = `${frontendUrl}/?payment=pending&booking_id=${booking_id}&order_id=${order_id}`;
+      console.log("Redirecting to pending URL:", pendingUrl);
+      return res.redirect(pendingUrl);
+    }
+
+  } catch (error) {
+    console.error("Payment callback error:", error);
+    
+    // Redirect to home page with error message
+    const frontendUrl = process.env.FRONTEND_URL || 
+      (process.env.NODE_ENV === 'production' 
+        ? 'https://boxcric.netlify.app' 
+        : 'http://localhost:5173');
+    
+    const errorUrl = `${frontendUrl}/?payment=error&error=${encodeURIComponent('Payment processing error')}`;
+    return res.redirect(errorUrl);
   }
 });
 
