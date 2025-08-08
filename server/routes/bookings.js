@@ -122,6 +122,14 @@ router.post("/", authMiddleware, async (req, res) => {
       });
     }
 
+    // Debug player details
+    console.log("Player details received:", {
+      hasContactPerson: !!playerDetails.contactPerson,
+      hasName: !!(playerDetails.contactPerson?.name),
+      hasPhone: !!(playerDetails.contactPerson?.phone),
+      phoneValue: playerDetails.contactPerson?.phone
+    });
+
     // Validate player details
     if (!playerDetails.contactPerson || !playerDetails.contactPerson.name || !playerDetails.contactPerson.phone) {
       return res.status(400).json({
@@ -225,13 +233,14 @@ router.post("/", authMiddleware, async (req, res) => {
           status: { $in: ["pending", "confirmed"] }
         }).session(session);
 
-        // Check for overlaps using JavaScript logic
+        // Check for overlaps using enhanced logic
         console.log(`Checking for overlaps with ${existingBookings.length} existing bookings`);
-        const overlappingBooking = existingBookings.find(booking => {
-          const bookingStart = new Date(`2000-01-01 ${booking.timeSlot.startTime}`);
-          const bookingEnd = new Date(`2000-01-01 ${booking.timeSlot.endTime}`);
+        const overlappingBookings = existingBookings.filter(booking => {
+          const hasOverlap = doTimeRangesOverlap(
+            startTime, endTime,
+            booking.timeSlot.startTime, booking.timeSlot.endTime
+          );
           
-          const hasOverlap = start < bookingEnd && end > bookingStart;
           if (hasOverlap) {
             console.log(`Found overlap: New booking (${startTime}-${endTime}) overlaps with existing booking (${booking.timeSlot.startTime}-${booking.timeSlot.endTime})`);
           }
@@ -239,11 +248,23 @@ router.post("/", authMiddleware, async (req, res) => {
           return hasOverlap;
         });
 
-        if (overlappingBooking) {
+        if (overlappingBookings.length > 0) {
+          const overlappingBooking = overlappingBookings[0];
           console.log("Slot overlaps with an existing booking:", overlappingBooking.bookingId);
+          
+          // Provide more detailed error message
+          const errorMessage = overlappingBookings.length === 1 
+            ? `This time slot (${startTime}-${endTime}) overlaps with an existing booking (${overlappingBooking.timeSlot.startTime}-${overlappingBooking.timeSlot.endTime}). Please select a different time.`
+            : `This time slot (${startTime}-${endTime}) overlaps with ${overlappingBookings.length} existing bookings. Please select a different time.`;
+          
           return res.status(400).json({ 
             success: false, 
-            message: `This time slot (${startTime}-${endTime}) overlaps with an existing booking (${overlappingBooking.timeSlot.startTime}-${overlappingBooking.timeSlot.endTime}). Please select a different time.` 
+            message: errorMessage,
+            overlappingBookings: overlappingBookings.map(b => ({
+              bookingId: b.bookingId,
+              timeSlot: b.timeSlot,
+              status: b.status
+            }))
           });
         }
       } catch (overlapError) {
@@ -616,23 +637,22 @@ router.get("/ground/:groundId/:date", async (req, res) => {
       return `${start}-${end}`;
     });
 
-    // Find booked slots and check for overlaps
+    // Find booked slots and check for overlaps using enhanced logic
     const bookedSlots = [];
     const availableSlots = [];
 
     for (const slot of ALL_24H_SLOTS) {
       const [slotStart, slotEnd] = slot.split("-");
-      const slotStartTime = new Date(`2000-01-01 ${slotStart}`);
-      const slotEndTime = new Date(`2000-01-01 ${slotEnd}`);
       
       let isSlotBooked = false;
       
       for (const booking of bookings) {
-        const bookingStart = new Date(`2000-01-01 ${booking.timeSlot.startTime}`);
-        const bookingEnd = new Date(`2000-01-01 ${booking.timeSlot.endTime}`);
+        const hasOverlap = doTimeRangesOverlap(
+          slotStart, slotEnd,
+          booking.timeSlot.startTime, booking.timeSlot.endTime
+        );
         
-        // Check if this slot overlaps with the booking
-        if (slotStartTime < bookingEnd && slotEndTime > bookingStart) {
+        if (hasOverlap) {
           isSlotBooked = true;
           break;
         }

@@ -254,7 +254,21 @@ const NewBookingModal: React.FC<NewBookingModalProps> = ({
   };
 
   const handleBook = async () => {
-    if (!ground || !selectedDate || !selectedStartSlotObj || !selectedEndTime || !playerCount || !contactName || !contactPhone) return;
+    console.log("Booking validation:", {
+      ground: !!ground,
+      selectedDate: !!selectedDate,
+      selectedStartSlotObj: !!selectedStartSlotObj,
+      selectedEndTime: !!selectedEndTime,
+      playerCount: !!playerCount,
+      contactName: !!contactName,
+      contactPhone: !!contactPhone,
+      user: !!user
+    });
+    
+    if (!ground || !selectedDate || !selectedStartSlotObj || !selectedEndTime || !playerCount || !contactName || !contactPhone) {
+      console.log("Missing required fields for booking");
+      return;
+    }
     if (!user) {
       toast.error("Please login to create a booking");
       return;
@@ -282,6 +296,8 @@ const NewBookingModal: React.FC<NewBookingModalProps> = ({
       },
       requirements: undefined,
     };
+    
+    console.log("Phone number being sent:", contactPhone);
     
     try {
       console.log("Sending booking data:", bookingData);
@@ -596,7 +612,7 @@ const NewBookingModal: React.FC<NewBookingModalProps> = ({
               className="flex-1 h-12 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               {!selectedDate || !selectedStartSlotObj || !selectedEndTime || !playerCount || !contactName || !contactPhone 
-                ? "Complete Details to Book" 
+                ? `Complete Details to Book ${!contactPhone ? '(Phone Required)' : ''}` 
                 : "Proceed to Payment"
               }
             </Button>

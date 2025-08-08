@@ -346,7 +346,9 @@ function Dashboard({ token, onLogout }) {
     return !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
   function isValidPhone(phone) {
-    return /^\d{8,15}$/.test(phone.replace(/\D/g, ''));
+    // More flexible phone validation - allow any phone number format
+    // Just ensure it's not empty and has at least 5 characters
+    return phone && phone.trim().length >= 5;
   }
   function isPositiveInt(val) {
     return /^\d+$/.test(val) && parseInt(val) > 0;
@@ -793,7 +795,7 @@ function Dashboard({ token, onLogout }) {
       return;
     }
     if (!isValidPhone(addBookingData.contactPhone)) {
-      setAddBookingError('Please enter a valid phone number (8-15 digits).');
+      setAddBookingError('Please enter a valid phone number (at least 5 characters).');
       return;
     }
     if (!isValidEmail(addBookingData.contactEmail)) {

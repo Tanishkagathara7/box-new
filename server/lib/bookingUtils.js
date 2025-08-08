@@ -16,6 +16,14 @@ export function doTimeRangesOverlap(startTime1, endTime1, startTime2, endTime2) 
   const start2 = new Date(`2000-01-01 ${startTime2}`);
   const end2 = new Date(`2000-01-01 ${endTime2}`);
   
+  // Handle overnight bookings (e.g., 22:00-06:00)
+  if (end1 < start1) {
+    end1.setDate(end1.getDate() + 1);
+  }
+  if (end2 < start2) {
+    end2.setDate(end2.getDate() + 1);
+  }
+  
   return start1 < end2 && end1 > start2;
 }
 
