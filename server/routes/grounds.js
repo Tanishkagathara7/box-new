@@ -120,6 +120,19 @@ function mapMongoGroundToFallback(groundDoc, bookingsByDate = {}) {
   };
 }
 
+// Simple in-memory cache for grounds (valid for 5 minutes)
+const groundsCache = {
+  data: null,
+  timestamp: null,
+  ttl: 5 * 60 * 1000 // 5 minutes
+};
+
+// Check if cache is valid
+function isCacheValid() {
+  return groundsCache.data && groundsCache.timestamp && 
+         (Date.now() - groundsCache.timestamp < groundsCache.ttl);
+}
+
 // Refactor: extract handler functions
 async function getAllGroundsHandler(req, res) {
   try {
@@ -143,85 +156,121 @@ async function getAllGroundsHandler(req, res) {
     let grounds = [];
     let total = 0;
     let usedFallback = false;
+    let usedCache = false;
 
-    // Always try to fetch from MongoDB for all cities
-    try {
-      const filter = { status: "active", isVerified: true };
-      if (cityId) filter["location.cityId"] = cityId;
-      if (search) {
-        filter.$or = [
-          { name: { $regex: search, $options: "i" } },
-          { description: { $regex: search, $options: "i" } },
-          { amenities: { $in: [new RegExp(search, "i")] } },
-        ];
-      }
-      if (minPrice || maxPrice) {
-        filter["price.perHour"] = {};
-        if (minPrice) filter["price.perHour"].$gte = Number(minPrice);
-        if (maxPrice) filter["price.perHour"].$lte = Number(maxPrice);
-      }
-      if (amenities) {
-        const amenitiesArray = Array.isArray(amenities) ? amenities : [amenities];
-        filter.amenities = { $all: amenitiesArray };
-      }
-      if (pitchType && pitchType !== "all") {
-        filter["features.pitchType"] = pitchType;
-      }
-      if (lighting === "true") {
-        filter["features.lighting"] = true;
-      }
-      if (parking === "true") {
-        filter["features.parking"] = true;
-      }
-      if (minRating) {
-        filter["rating.average"] = { $gte: Number(minRating) };
-      }
-      const skip = (Number(page) - 1) * Number(limit);
-      grounds = await Ground.find(filter)
-        .populate("owner.userId", "name email phone")
-        .sort({ "rating.average": -1, totalBookings: -1 })
-        .skip(skip)
-        .limit(Number(limit));
-      total = await Ground.countDocuments(filter);
-      // Calculate distances if coordinates provided
-      if (lat && lng) {
-        grounds = grounds
-          .map((ground) => {
-            const distance = ground.location && ground.location.latitude && ground.location.longitude
-              ? calculateDistance(Number(lat), Number(lng), ground.location.latitude, ground.location.longitude)
-              : null;
-            return { ...ground.toObject(), distance };
-          })
-          .filter((ground) =>
-            maxDistance && ground.distance !== null ? ground.distance <= Number(maxDistance) : true,
-          )
-          .sort((a, b) => (a.distance || 0) - (b.distance || 0));
-      }
-      // Get today's bookings for availability
-      const today = new Date().toISOString().split("T")[0];
-      const groundIds = grounds.map((g) => g._id);
-      const todayBookings = demoBookings.filter(
-        (b) => groundIds.includes(b.groundId) && b.bookingDate === today
-      );
-      // Add availability info
-      grounds = grounds.map((ground) => {
-        const groundBookings = todayBookings.filter(
-          (b) => b.groundId === ground._id.toString(),
+    // Check cache first for basic requests (no complex filtering)
+    const isBasicRequest = !search && !minPrice && !maxPrice && !amenities && 
+                          !pitchType && !lighting && !parking && !minRating && 
+                          !lat && !lng && !maxDistance && page == 1;
+    
+    if (isBasicRequest && isCacheValid()) {
+      grounds = groundsCache.data.filter(g => !cityId || g.location?.cityId === cityId).slice(0, Number(limit));
+      total = groundsCache.data.filter(g => !cityId || g.location?.cityId === cityId).length;
+      usedCache = true;
+    } else {
+      // Always try to fetch from MongoDB for all cities
+      try {
+        const filter = { status: "active", isVerified: true };
+        if (cityId) filter["location.cityId"] = cityId;
+        if (search) {
+          filter.$or = [
+            { name: { $regex: search, $options: "i" } },
+            { description: { $regex: search, $options: "i" } },
+            { amenities: { $in: [new RegExp(search, "i")] } },
+          ];
+        }
+        if (minPrice || maxPrice) {
+          filter["price.perHour"] = {};
+          if (minPrice) filter["price.perHour"].$gte = Number(minPrice);
+          if (maxPrice) filter["price.perHour"].$lte = Number(maxPrice);
+        }
+        if (amenities) {
+          const amenitiesArray = Array.isArray(amenities) ? amenities : [amenities];
+          filter.amenities = { $all: amenitiesArray };
+        }
+        if (pitchType && pitchType !== "all") {
+          filter["features.pitchType"] = pitchType;
+        }
+        if (lighting === "true") {
+          filter["features.lighting"] = true;
+        }
+        if (parking === "true") {
+          filter["features.parking"] = true;
+        }
+        if (minRating) {
+          filter["rating.average"] = { $gte: Number(minRating) };
+        }
+        
+        const skip = (Number(page) - 1) * Number(limit);
+        
+        // Use Promise.all for parallel execution of find and count
+        const [groundsResult, totalResult] = await Promise.all([
+          Ground.find(filter)
+            .populate("owner.userId", "name email phone")
+            .sort({ "rating.average": -1, totalBookings: -1 })
+            .skip(skip)
+            .limit(Number(limit))
+            .lean(), // Use lean() for better performance
+          Ground.countDocuments(filter)
+        ]);
+        
+        grounds = groundsResult;
+        total = totalResult;
+        
+        // Update cache for basic requests
+        if (isBasicRequest && grounds.length > 0) {
+          groundsCache.data = grounds;
+          groundsCache.timestamp = Date.now();
+        }
+        // Calculate distances if coordinates provided
+        if (lat && lng) {
+          grounds = grounds
+            .map((ground) => {
+              const distance = ground.location && ground.location.latitude && ground.location.longitude
+                ? calculateDistance(Number(lat), Number(lng), ground.location.latitude, ground.location.longitude)
+                : null;
+              return { ...ground, distance }; // No need for toObject() with lean()
+            })
+            .filter((ground) =>
+              maxDistance && ground.distance !== null ? ground.distance <= Number(maxDistance) : true,
+            )
+            .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+        }
+        
+        // Get today's bookings for availability - optimize this
+        const today = new Date().toISOString().split("T")[0];
+        const groundIds = grounds.map((g) => g._id.toString());
+        const todayBookings = demoBookings.filter(
+          (b) => groundIds.includes(b.groundId) && b.bookingDate === today
         );
-        const bookedSlots = groundBookings.map((b) => b.timeSlot);
-        return {
-          ...ground.toObject(),
-          availability: {
-            ...ground.availability,
-            bookedSlots,
-            availableSlots: ground.availability?.timeSlots?.filter(
-              (slot) => !bookedSlots.includes(slot),
-            ) || [],
-          },
-        };
-      });
-    } catch (dbError) {
-      console.log("Database unavailable, using fallback data");
+        
+        // Create a map for faster lookup
+        const bookingsMap = new Map();
+        todayBookings.forEach(booking => {
+          if (!bookingsMap.has(booking.groundId)) {
+            bookingsMap.set(booking.groundId, []);
+          }
+          bookingsMap.get(booking.groundId).push(booking.timeSlot);
+        });
+        
+        // Add availability info with optimized lookup
+        grounds = grounds.map((ground) => {
+          const groundId = ground._id.toString();
+          const bookedSlots = bookingsMap.get(groundId) || [];
+          const timeSlots = ground.availability?.timeSlots || DEFAULT_TIME_SLOTS;
+          
+          return {
+            ...ground,
+            availability: {
+              timeSlots,
+              bookedSlots,
+              availableSlots: timeSlots.filter(slot => !bookedSlots.includes(slot)),
+            },
+          };
+        });
+      } catch (dbError) {
+        console.log("Database unavailable, using fallback data");
+      }
     }
 
     // If no grounds found in MongoDB and city is mumbai or delhi, use fallback
@@ -305,6 +354,8 @@ async function getAllGroundsHandler(req, res) {
         hasPrev: Number(page) > 1,
       },
       usedFallback,
+      usedCache,
+      timestamp: Date.now()
     });
   } catch (error) {
     console.error("Get grounds error:", error);

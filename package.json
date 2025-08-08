@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "node start-simple.js",
     "dev:frontend": "vite",
+    "dev:render": "vite --host --mode local",
     "dev:backend": "nodemon server/index.js",
     "build": "vite build",
     "build:render": "npm run build && npm run build:server",
@@ -20,6 +21,7 @@
     "format.fix": "prettier --write .",
     "typecheck": "tsc",
     "test:render": "node test-render-deployment.js",
+    "test:with-render": "node test-with-render.js",
     "deploy": "node deploy-to-render.js",
     "deploy:vercel": "node deploy-vercel.js",
     "check:health": "node check-deployment-health.js",
