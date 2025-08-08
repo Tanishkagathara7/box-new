@@ -168,10 +168,10 @@ async function getAllGroundsHandler(req, res) {
       total = groundsCache.data.filter(g => !cityId || g.location?.cityId === cityId).length;
       usedCache = true;
     } else {
-      // Always try to fetch from MongoDB for all cities
-      try {
-        const filter = { status: "active", isVerified: true };
-        if (cityId) filter["location.cityId"] = cityId;
+              // Always try to fetch from MongoDB for all cities
+        try {
+          const filter = { status: "active" }; // Remove isVerified requirement for now
+          if (cityId) filter["location.cityId"] = cityId;
         if (search) {
           filter.$or = [
             { name: { $regex: search, $options: "i" } },
@@ -217,6 +217,9 @@ async function getAllGroundsHandler(req, res) {
         grounds = groundsResult;
         total = totalResult;
         
+        console.log(`📊 Found ${grounds.length} grounds for city ${cityId}`);
+        console.log(`📊 Total grounds in database for this city: ${total}`);
+        
         // Update cache for basic requests
         if (isBasicRequest && grounds.length > 0) {
           groundsCache.data = grounds;
@@ -237,20 +240,43 @@ async function getAllGroundsHandler(req, res) {
             .sort((a, b) => (a.distance || 0) - (b.distance || 0));
         }
         
-        // Get today's bookings for availability - optimize this
+        // Get today's bookings for availability from MongoDB
         const today = new Date().toISOString().split("T")[0];
         const groundIds = grounds.map((g) => g._id.toString());
-        const todayBookings = demoBookings.filter(
-          (b) => groundIds.includes(b.groundId) && b.bookingDate === today
-        );
+        
+        // Fetch real bookings from MongoDB
+        let todayBookings = [];
+        try {
+          const Booking = mongoose.model('Booking');
+          todayBookings = await Booking.find({
+            groundId: { $in: groundIds },
+            bookingDate: today,
+            status: { $in: ["pending", "confirmed"] }
+          }).select('groundId timeSlot').lean();
+          
+          console.log(`📅 Found ${todayBookings.length} real bookings for today`);
+        } catch (bookingError) {
+          console.log("Could not fetch bookings from MongoDB, using demo data:", bookingError.message);
+          // Fallback to demo bookings if MongoDB fails
+          todayBookings = demoBookings.filter(
+            (b) => groundIds.includes(b.groundId) && b.bookingDate === today
+          );
+        }
         
         // Create a map for faster lookup
         const bookingsMap = new Map();
         todayBookings.forEach(booking => {
-          if (!bookingsMap.has(booking.groundId)) {
-            bookingsMap.set(booking.groundId, []);
+          const groundId = booking.groundId?.toString() || booking.groundId;
+          const timeSlot = booking.timeSlot?.startTime && booking.timeSlot?.endTime 
+            ? `${booking.timeSlot.startTime}-${booking.timeSlot.endTime}`
+            : booking.timeSlot;
+            
+          if (!bookingsMap.has(groundId)) {
+            bookingsMap.set(groundId, []);
           }
-          bookingsMap.get(booking.groundId).push(booking.timeSlot);
+          bookingsMap.get(groundId).push(timeSlot);
+          
+          console.log(`📋 Booking: Ground ${groundId}, Time: ${timeSlot}`);
         });
         
         // Add availability info with optimized lookup
@@ -258,13 +284,16 @@ async function getAllGroundsHandler(req, res) {
           const groundId = ground._id.toString();
           const bookedSlots = bookingsMap.get(groundId) || [];
           const timeSlots = ground.availability?.timeSlots || DEFAULT_TIME_SLOTS;
+          const availableSlots = timeSlots.filter(slot => !bookedSlots.includes(slot));
+          
+          console.log(`🏟️ Ground: ${ground.name} - Booked: ${bookedSlots.length}, Available: ${availableSlots.length}, Total: ${timeSlots.length}`);
           
           return {
             ...ground,
             availability: {
               timeSlots,
               bookedSlots,
-              availableSlots: timeSlots.filter(slot => !bookedSlots.includes(slot)),
+              availableSlots,
             },
           };
         });
@@ -273,8 +302,8 @@ async function getAllGroundsHandler(req, res) {
       }
     }
 
-    // If no grounds found in MongoDB and city is mumbai or delhi, use fallback
-    if (grounds.length === 0 && (cityId === "mumbai" || cityId === "delhi")) {
+    // If no grounds found in MongoDB, use fallback for any city
+    if (grounds.length === 0) {
       usedFallback = true;
       let filteredGrounds = [...fallbackGrounds];
       if (cityId) {
