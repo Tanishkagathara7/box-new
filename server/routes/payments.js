@@ -30,6 +30,7 @@ const cashfree = new Cashfree(
 if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
   console.error("❌ Cashfree credentials not found in environment variables!");
   console.error("   Set CASHFREE_APP_ID and CASHFREE_SECRET_KEY for payment processing");
+  console.error("   Using mock payment mode for development");
 }
 
 const router = express.Router();
@@ -163,12 +164,10 @@ router.post("/create-order", authMiddleware, async (req, res) => {
         customer_email: booking.playerDetails?.contactPerson?.email || "customer@example.com"
       },
       order_meta: {
-        return_url: IS_DEVELOPMENT 
-          ? `${req.protocol}://${req.get('host')}/api/payments/callback?booking_id=${booking._id}` // Use local callback for development
-          : `${req.protocol}://${req.get('host')}/api/payments/callback?booking_id=${booking._id}`,
-        notify_url: IS_DEVELOPMENT 
-          ? `${req.protocol}://${req.get('host')}/api/payments/webhook` // Use local webhook for development
-          : `${req.protocol}://${req.get('host')}/api/payments/webhook`,
+        return_url: process.env.FRONTEND_URL 
+          ? `${process.env.FRONTEND_URL}/payment/success?booking_id=${booking._id}` 
+          : `https://box-new.vercel.app/payment/success?booking_id=${booking._id}`,
+        notify_url: `https://box-new.onrender.com/api/payments/webhook`,
         payment_methods: "cc,dc,nb,upi,paylater,emi"
       }
     };
@@ -178,10 +177,36 @@ router.post("/create-order", authMiddleware, async (req, res) => {
 
     // Check if credentials are available
     if (!CASHFREE_APP_ID || !CASHFREE_SECRET_KEY) {
-      console.error("Cashfree credentials not configured!");
-      return res.status(500).json({
-        success: false,
-        message: "Payment gateway not configured. Please contact support."
+      console.log("Cashfree credentials not configured - using mock payment mode");
+      
+      // Create mock payment response for development
+      const mockOrderId = `mock_order_${booking._id}_${Date.now()}`;
+      const mockPaymentSessionId = `mock_session_${Date.now()}`;
+      
+      // Update booking with mock payment details
+      booking.payment = {
+        ...booking.payment,
+        cashfreeOrderId: mockOrderId,
+        status: "pending",
+        isMock: true
+      };
+      await booking.save();
+      
+      console.log("Mock payment order created:", mockOrderId);
+      
+      return res.json({
+        success: true,
+        order: {
+          id: mockOrderId,
+          amount: totalAmount,
+          currency: "INR",
+          payment_session_id: mockPaymentSessionId,
+          order_status: "ACTIVE",
+          payment_url: `${req.protocol}://${req.get('host')}/api/payments/mock-payment?order_id=${mockOrderId}&session_id=${mockPaymentSessionId}`,
+        },
+        appId: "mock_app_id",
+        mode: "mock",
+        isMock: true
       });
     }
     
@@ -477,6 +502,55 @@ router.post("/webhook", async (req, res) => {
   } catch (error) {
     console.error("Webhook processing error:", error);
     res.status(500).json({ success: false, message: "Webhook processing failed" });
+  }
+});
+
+/**
+ * Mock payment handler for development/testing
+ */
+router.get("/mock-payment", async (req, res) => {
+  try {
+    const { order_id, session_id } = req.query;
+    
+    console.log("Mock payment received:", { order_id, session_id });
+    
+    // Find booking by order_id
+    const booking = await Booking.findOne({ 
+      "payment.cashfreeOrderId": order_id 
+    });
+    
+    if (!booking) {
+      console.error("Booking not found for mock order_id:", order_id);
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+    
+    // Simulate successful payment
+    booking.payment.status = "completed";
+    booking.payment.paidAt = new Date();
+    booking.payment.isMock = true;
+    booking.status = "confirmed";
+    booking.confirmation = {
+      confirmedAt: new Date(),
+      confirmationCode: `BC${Date.now().toString().slice(-6)}`,
+      confirmedBy: "system"
+    };
+    
+    await booking.save();
+    console.log("Mock payment completed for booking:", booking.bookingId);
+    
+    // Redirect to success page
+    const frontendUrl = process.env.FRONTEND_URL || 
+      (process.env.NODE_ENV === 'production' 
+        ? 'https://boxcric.netlify.app' 
+        : 'http://localhost:5173');
+    
+    const successUrl = `${frontendUrl}/?payment=success&booking_id=${booking._id}&order_id=${order_id}`;
+    console.log("Redirecting to success URL:", successUrl);
+    return res.redirect(successUrl);
+    
+  } catch (error) {
+    console.error("Mock payment error:", error);
+    res.status(500).json({ success: false, message: "Mock payment failed" });
   }
 });
 

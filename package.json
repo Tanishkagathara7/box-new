@@ -22,6 +22,7 @@
     "typecheck": "tsc",
     "test:render": "node test-render-deployment.js",
     "test:with-render": "node test-with-render.js",
+    "push-fixes": "node push-fixes.js",
     "deploy": "node deploy-to-render.js",
     "deploy:vercel": "node deploy-vercel.js",
     "check:health": "node check-deployment-health.js",

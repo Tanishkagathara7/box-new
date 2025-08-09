@@ -192,12 +192,25 @@ const PaymentModal = ({
         throw new Error((orderResponse as any)?.message || "Failed to create order");
       }
 
-      const { order, appId } = orderResponse as any;
+      const { order, appId, isMock } = orderResponse as any;
       console.log("Order details:", order);
       console.log("Payment URL:", order.payment_url);
+      console.log("Is mock payment:", isMock);
 
       if (!appId) {
         throw new Error("Payment app ID missing from server response.");
+      }
+
+      // Handle mock payments for development
+      if (isMock) {
+        console.log("Processing mock payment...");
+        toast.info("Processing mock payment for development...");
+        
+        // Simulate payment processing
+        setTimeout(() => {
+          window.location.href = order.payment_url;
+        }, 2000);
+        return;
       }
 
       // Use Cashfree SDK for checkout
