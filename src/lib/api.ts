@@ -2,8 +2,15 @@ import axios from "axios";
 import { isMongoObjectId } from "./utils";
 
 // Use environment variables or adapt to deployment environment
-const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" ? "http://localhost:3001/api" : "https://box-new.onrender.com/api");
+// Always prioritize VITE_API_URL from environment
+const API_BASE_URL = import.meta.env.VITE_API_URL || "https://box-new.onrender.com/api";
+
+console.log('🔗 API Configuration:', {
+  VITE_API_URL: import.meta.env.VITE_API_URL,
+  API_BASE_URL,
+  hostname: window.location.hostname,
+  env_mode: import.meta.env.MODE
+});
 
 // Create axios instance
 const api = axios.create({
