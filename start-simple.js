@@ -4,33 +4,39 @@ import { spawn } from 'child_process';
 
 console.log('🚀 Starting BoxCric Development Environment');
 console.log('==========================================');
+console.log('💡 Using deployed backend and frontend URLs');
+console.log('🌐 Backend: https://box-new.onrender.com');
+console.log('📱 Frontend: https://box-new.vercel.app');
+console.log('');
 
-// Start backend
-console.log('\n🔧 Starting backend server...');
-const backend = spawn('node', ['server/index.js'], {
+// Set environment variables for deployed URLs
+process.env.VITE_API_URL = 'https://box-new.onrender.com/api';
+process.env.FRONTEND_URL = 'https://box-new.vercel.app';
+process.env.NODE_ENV = 'development';
+
+console.log('🔧 Starting frontend with deployed backend...');
+const frontend = spawn('vite', ['--host', '--port', '8080'], {
   stdio: 'inherit',
-  shell: true
+  shell: true,
+  env: {
+    ...process.env,
+    VITE_API_URL: 'https://box-new.onrender.com/api'
+  }
 });
 
-// Wait a moment for backend to start
-setTimeout(() => {
-  console.log('\n📱 Starting frontend server...');
-  const frontend = spawn('npm', ['run', 'dev:frontend'], {
-    stdio: 'inherit',
-    shell: true
-  });
+// Handle process termination
+process.on('SIGINT', () => {
+  console.log('\n🛑 Shutting down frontend...');
+  frontend.kill();
+  process.exit(0);
+});
 
-  // Handle process termination
-  process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down servers...');
-    backend.kill();
-    frontend.kill();
-    process.exit(0);
-  });
-}, 3000);
-
-console.log('\n✅ Servers starting...');
-console.log('🔧 Backend: http://localhost:3001');
-console.log('📱 Frontend: Will start on next available port');
-console.log('📊 Health check: http://localhost:3001/api/health');
+console.log('\n✅ Frontend starting with deployed backend...');
+console.log('🔧 Backend: https://box-new.onrender.com (deployed)');
+console.log('📱 Frontend: http://localhost:8080 (local)');
+console.log('📊 Health check: https://box-new.onrender.com/api/health');
+console.log('💳 Cashfree test: https://box-new.onrender.com/api/payments/test-cashfree');
+console.log('');
+console.log('🎯 This setup uses your deployed Render backend with local frontend');
+console.log('📋 Perfect for testing booking flow with production backend');
 console.log('\nPress Ctrl+C to stop all servers'); 

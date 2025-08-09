@@ -411,8 +411,13 @@ const Index = () => {
     }
   };
 
-  // Replace displayGrounds with only real MongoDB grounds
-  const realGrounds = useMemo(() => grounds.filter(g => isMongoObjectId(g._id)), [grounds]);
+  // Display all grounds (both MongoDB and fallback data)
+  const displayGrounds = useMemo(() => {
+    console.log('📊 Processing grounds for display:', grounds.length);
+    console.log('📊 Sample ground IDs:', grounds.slice(0, 3).map(g => ({ id: g._id, name: g.name, isMongo: isMongoObjectId(g._id) })));
+    // Show all grounds - MongoDB grounds can be booked, fallback grounds show "View Details" only
+    return grounds;
+  }, [grounds]);
 
   const handleCitySelect = (city: City) => {
     setSelectedCity(city);
@@ -449,7 +454,7 @@ const Index = () => {
 
   const handleViewDetails = (groundId: string) => {
     console.log("View details clicked for ground ID:", groundId);
-    console.log("Ground data:", realGrounds.find(g => g._id === groundId));
+    console.log("Ground data:", displayGrounds.find(g => g._id === groundId));
     navigate(`/ground/${groundId}`);
   };
 
@@ -612,9 +617,9 @@ const Index = () => {
                 <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">
                   Cricket Grounds in {selectedCity.name}
                 </h2>
-                <p className="text-gray-600 text-sm sm:text-base">
-                  {realGrounds.length} amazing grounds available for booking
-                </p>
+              <p className="text-gray-600 text-sm sm:text-base">
+                {displayGrounds.length} amazing grounds available for booking
+              </p>
               </div>
               <div className="flex items-center space-x-2">
                 {Object.values(filters).some((value, index) =>
@@ -716,9 +721,9 @@ const Index = () => {
                   </Card>
                 ))}
               </div>
-            ) : realGrounds.length > 0 ? (
+            ) : displayGrounds.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {realGrounds.map((ground) => (
+                {displayGrounds.map((ground) => (
                   <GroundCard
                     key={ground._id}
                     ground={ground}
