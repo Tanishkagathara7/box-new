@@ -13,6 +13,8 @@ console.log('');
 process.env.VITE_API_URL = 'https://box-new.onrender.com/api';
 process.env.FRONTEND_URL = 'https://box-new.vercel.app';
 process.env.NODE_ENV = 'development';
+// Explicitly unset PORT to avoid any backend startup
+delete process.env.PORT;
 
 console.log('🔧 Starting frontend with deployed backend...');
 const frontend = spawn('vite', ['--host', '--port', '8080'], {
